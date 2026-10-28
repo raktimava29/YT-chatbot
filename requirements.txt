@@ -1,0 +1,6 @@
+fastapi[standard]
+uvicorn
+langchain-huggingface 
+sentence-transformers
+langchain_community
+faiss-cpu
