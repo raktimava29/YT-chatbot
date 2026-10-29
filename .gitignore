@@ -8,3 +8,8 @@ wheels/
 
 # Virtual environments
 .venv
+
+faiss_idx/
+.env
+create_pinecone_index.py
+trial.ipynb

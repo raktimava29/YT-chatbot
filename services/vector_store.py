@@ -1,38 +1,36 @@
+import os
+from dotenv import load_dotenv
 from langchain_huggingface import HuggingFaceEmbeddings
-from pathlib import Path
-from langchain_community.vectorstores import FAISS
+from langchain_pinecone import PineconeVectorStore
 from langchain_core.documents import Document
 
-INDEX_DIR = Path("faiss_idx")
+load_dotenv()
+
+INDEX_NAME = os.environ["PINECONE_INDEX_NAME"]
+API_KEY = os.environ["PINECONE_KEY"]
 
 embeddings = HuggingFaceEmbeddings(
     model_name="sentence-transformers/all-MiniLM-L6-v2"
 )
 
-def create_vector_store(chunks: list[Document], video_id: str):
-    vector_store = FAISS.from_documents(
-        documents=chunks,
-        embedding=embeddings
+def load_vector_store(video_id:str):
+    return PineconeVectorStore(
+        index_name=INDEX_NAME,
+        embedding=embeddings,
+        namespace=video_id,
+        pinecone_api_key=API_KEY
     )
     
-    save_path = INDEX_DIR/video_id
-    save_path.mkdir(parents=True, exist_ok=True)
+def create_vector_store(chunks: list[Document], video_id: str):
+    vector_store=load_vector_store(video_id)
     
-    vector_store.save_local(str(save_path))
+    vector_store.add_documents(
+        documents=chunks,
+        ids=[f"{video_id}-{i}" for i in range(len(chunks))]
+    )
     
     return vector_store
 
-def load_vector_store(video_id:str):
-    index_path = INDEX_DIR/video_id
-    
-    if not index_path.exists():
-        raise FileNotFoundError("FAISS index not found")
-    
-    return FAISS.load_local(
-        str(index_path),
-        embeddings,
-        allow_dangerous_deserialization=True
-    )
     
 def search_transcript(video_id:str, query:str, k:int = 4):
     vector_store=load_vector_store(video_id)

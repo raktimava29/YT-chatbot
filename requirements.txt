@@ -1,6 +1,8 @@
-fastapi[standard]
+python-dotenv
 uvicorn
+fastapi[standard]
 langchain-huggingface 
 sentence-transformers
 langchain_community
-faiss-cpu
+langchain-pinecone
+pinecone
