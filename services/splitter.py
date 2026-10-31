@@ -2,53 +2,64 @@ from langchain_core.documents import Document
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 
-def split_transcript(transcript: list[dict], video_id: str):
+def split_transcript(transcript: list[dict], video_id: str, chunk_size: int = 1000, chunk_overlap: int = 200):
     splitter = RecursiveCharacterTextSplitter(
-        chunk_size=1000,
-        chunk_overlap=200,
+        chunk_size=chunk_size,
+        chunk_overlap=chunk_overlap,
+        add_start_index=True,
     )
 
-    documents = []
-    current_text = []
-    current_start = None
-    current_end = None
+    text_parts = []
+    snippet_ranges = []
+    cursor = 0
 
     for snippet in transcript:
-        if current_start is None:
-            current_start = snippet["start"]
+        snippet_text = snippet["text"]
 
-        current_text.append(snippet["text"])
-        current_end = snippet["end"]
+        start_offset = cursor
+        end_offset = start_offset + len(snippet_text)
 
-        text = " ".join(current_text)
+        text_parts.append(snippet_text)
 
-        if len(text) >= 1000:
-            split_texts = splitter.split_text(text)
+        snippet_ranges.append({
+            "start_offset": start_offset,
+            "end_offset": end_offset,
+            "start_time": snippet["start"],
+            "end_time": snippet["end"],
+        })
 
-            for chunk in split_texts:
-                documents.append(
-                    Document(
-                        page_content=chunk,
-                        metadata={
-                            "video_id": video_id,
-                            "start_time": current_start,
-                            "end_time": current_end,
-                        },
-                    )
-                )
+        cursor = end_offset + 1
 
-            current_text = []
-            current_start = None
-            current_end = None
+    full_text = " ".join(text_parts)
 
-    if current_text:
+    # Split text and retain original character offsets.
+    split_documents = splitter.create_documents([full_text])
+
+    documents = []
+
+    for chunk in split_documents:
+        chunk_start = chunk.metadata["start_index"]
+        chunk_end = chunk_start + len(chunk.page_content)
+
+        overlapping_snippets = [
+            snippet
+            for snippet in snippet_ranges
+            if (
+                snippet["start_offset"] < chunk_end
+                and snippet["end_offset"] > chunk_start
+            )
+        ]
+
+        if not overlapping_snippets:
+            continue
+
         documents.append(
             Document(
-                page_content=" ".join(current_text),
+                page_content=chunk.page_content,
                 metadata={
                     "video_id": video_id,
-                    "start_time": current_start,
-                    "end_time": current_end,
+                    "start_time": overlapping_snippets[0]["start_time"],
+                    "end_time": overlapping_snippets[-1]["end_time"],
                 },
             )
         )

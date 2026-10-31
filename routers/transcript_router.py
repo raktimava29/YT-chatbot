@@ -14,14 +14,23 @@ def get_transcript(request: TranscriptRequest):
             request.video_id,
             request.language,
         )
-        
-        chunks = split_transcript(text)
+
+        chunks = split_transcript(
+            transcript=text,
+            video_id=request.video_id,
+        )
 
         return {
             "video_id": request.video_id,
             "language": request.language,
             "transcript": text,
-            "chunks": [chunk.page_content for chunk in chunks]
+            "chunks": [
+                {
+                    "text": chunk.page_content,
+                    "metadata": chunk.metadata,
+                }
+                for chunk in chunks
+            ],
         }
 
     except TranscriptsDisabled as exc:
@@ -41,8 +50,8 @@ def get_transcript(request: TranscriptRequest):
             status_code=500,
             detail=str(exc),
         ) from exc
-        
-        
+
+
 @router.post("/index")
 def index_transcript(request: TranscriptRequest):
     try:
@@ -51,14 +60,18 @@ def index_transcript(request: TranscriptRequest):
             request.language,
         )
 
-        chunks = split_transcript(text)
+        chunks = split_transcript(
+            transcript=text,
+            video_id=request.video_id,
+        )
 
-        # Attach metadata to each chunk
         for chunk in chunks:
-            chunk.metadata["video_id"] = request.video_id
             chunk.metadata["language"] = request.language
 
-        create_vector_store(chunks, request.video_id)
+        create_vector_store(
+            chunks,
+            request.video_id,
+        )
 
         return {
             "message": "Transcript indexed successfully",
