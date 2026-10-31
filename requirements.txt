@@ -5,4 +5,5 @@ langchain-huggingface
 sentence-transformers
 langchain_community
 langchain-pinecone
+langchain-groq
 pinecone

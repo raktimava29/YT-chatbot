@@ -20,4 +20,13 @@ ytt = YouTubeTranscriptApi(
 
 def fetch_transcript(video_id: str, language: str="en"):
     transcript = ytt.fetch(video_id, languages=[language])
-    return " ".join(snippet.text for snippet in transcript)
+    
+    return [
+        {
+            "text": snippet.text,
+            "start": snippet.start,
+            "end": snippet.start + snippet.duration,
+            "duration": snippet.duration
+        }
+        for snippet in transcript.snippets
+    ]
