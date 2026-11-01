@@ -1,5 +1,6 @@
 import os
 from dotenv import load_dotenv
+from pinecone import Pinecone
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_pinecone import PineconeVectorStore
 from langchain_core.documents import Document
@@ -12,6 +13,9 @@ API_KEY = os.environ["PINECONE_KEY"]
 embeddings = HuggingFaceEmbeddings(
     model_name="sentence-transformers/all-MiniLM-L6-v2"
 )
+
+pc = Pinecone(api_key=API_KEY)
+index = pc.Index(INDEX_NAME)
 
 def load_vector_store(video_id:str):
     return PineconeVectorStore(
@@ -42,7 +46,9 @@ def search_transcript(video_id:str, query:str, k:int = 4):
     
     results=vector_store.similarity_search(query, k=k)
     
-    return [{
-        "text": doc.page_content,
-        "metadata": doc.metadata
-    } for doc in results]
+    return [
+        {
+            "text": doc.page_content,
+            "metadata": doc.metadata
+        } for doc in results
+    ]

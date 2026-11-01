@@ -31,8 +31,7 @@ def split_transcript(transcript: list[dict], video_id: str, chunk_size: int = 10
         cursor = end_offset + 1
 
     full_text = " ".join(text_parts)
-
-    # Split text and retain original character offsets.
+    
     split_documents = splitter.create_documents([full_text])
 
     documents = []
