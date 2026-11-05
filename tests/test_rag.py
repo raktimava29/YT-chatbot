@@ -1,9 +1,10 @@
 import pytest
 
+from core.errors import DependencyUnavailableError
+
 from langchain_core.documents import Document
 
 from services import rag
-
 
 UNAVAILABLE_MESSAGE = (
     "This information is not available in the video transcript."
@@ -148,7 +149,6 @@ def test_source_metadata_without_timestamps(monkeypatch):
     assert source["end_time"] is None
     assert "youtube_url" not in source
 
-
 def test_groq_generation_failure(monkeypatch, sample_document):
     monkeypatch.setattr(
         rag,
@@ -168,15 +168,11 @@ def test_groq_generation_failure(monkeypatch, sample_document):
         MockRAGChain(),
     )
 
-    with pytest.raises(
-        RuntimeError,
-        match="Groq API failure",
-    ):
+    with pytest.raises(DependencyUnavailableError):
         rag.ask_video(
             video_id="VMj-3S1tku0",
             question="What is micrograd?",
         )
-
 
 def test_format_timestamp():
     assert rag.format_timestamp(40.64) == "00:00:40"

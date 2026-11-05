@@ -3,9 +3,9 @@ from fastapi.testclient import TestClient
 from main import app
 from routers import chat_router
 
-
-client = TestClient(app)
-
+client = TestClient(
+    app, raise_server_exceptions=False
+)
 
 def test_valid_question(monkeypatch):
     def mock_ask_video(video_id, question):
@@ -106,7 +106,9 @@ def test_invalid_request_body():
 
 def test_rag_service_failure(monkeypatch):
     def mock_ask_video(video_id, question):
-        raise RuntimeError("Test service failure")
+        raise RuntimeError(
+            "Secret internal provider error"
+        )
 
     monkeypatch.setattr(
         chat_router,
@@ -123,4 +125,8 @@ def test_rag_service_failure(monkeypatch):
     )
 
     assert response.status_code == 500
-    assert response.json()["detail"] == "Test service failure"
+    assert response.json() == {
+        "detail": "Internal server error."
+    }
+
+    assert "Secret internal provider error" not in response.text

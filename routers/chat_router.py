@@ -10,14 +10,7 @@ router = APIRouter(
 
 @router.post("/ask")
 def chat(request: ChatRequest):
-    try:
-        return ask_video(
-            video_id=request.video_id,
-            question=request.question
-        )
-        
-    except Exception as exc:
-        raise HTTPException(
-            status_code=500,
-            detail=str(exc)
-        ) from exc
+    return ask_video(
+        video_id=request.video_id,
+        question=request.question
+    )

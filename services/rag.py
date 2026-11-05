@@ -1,4 +1,7 @@
 import os
+import logging
+
+from core.errors import DependencyUnavailableError
 
 from dotenv import load_dotenv
 from langchain_groq import ChatGroq
@@ -7,8 +10,9 @@ from langchain_core.output_parsers import StrOutputParser
 
 from services.reranker import retrieve_and_rerank
 
-
 load_dotenv()
+
+logger = logging.getLogger(__name__)
 
 llm = ChatGroq(
     model="qwen/qwen3.8-27b",
@@ -69,16 +73,20 @@ def format_timestamp(seconds: float) -> str:
     return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
 
 
-def ask_video(
-    video_id: str,
-    question: str,
-):
-    results = retrieve_and_rerank(
-        video_id=video_id,
-        query=question,
-        top_k=4,
-        candidate_k=20,
-    )
+def ask_video(video_id: str, question: str):
+    try:
+        results = retrieve_and_rerank(
+                video_id=video_id,
+                query=question,
+                top_k=4,
+                candidate_k=20,
+            )
+        
+    except Exception as exc:
+        logger.exception("Transcript retrieval failed")
+        raise DependencyUnavailableError(
+            "Transcript retrieval unavailable"
+        ) from exc
 
     unavailable_message = (
         "This information is not available in the video transcript."
@@ -91,15 +99,13 @@ def ask_video(
         }
 
     best_score = float(results[0][1])
-
-    # Temporary threshold based on notebook experiments.
+    
     if best_score < -5.0:
         return {
             "answer": unavailable_message,
             "sources": [],
         }
-
-    # Build timestamp-aware context for LLM.
+    
     context_parts = []
 
     for doc, score in results:
@@ -120,12 +126,18 @@ def ask_video(
 
     context = "\n\n".join(context_parts)
 
-    answer = rag_chain.invoke({
-        "context": context,
-        "question": question,
-    })
-
-    # Keep source metadata separate from LLM context.
+    try:
+        answer = rag_chain.invoke({
+                "context": context,
+                "question": question,
+            })
+        
+    except Exception as exc:
+        logger.exception("Answer generation failed")
+        raise DependencyUnavailableError(
+            "Answer generation unavailable"
+        ) from exc
+    
     sources = []
 
     for doc, score in results:
