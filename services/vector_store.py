@@ -28,10 +28,14 @@ def load_vector_store(video_id:str):
 def create_vector_store(chunks: list[Document], video_id: str):
     vector_store=load_vector_store(video_id)
     
-    vector_store.delete(
-        delete_all=True,
-        namespace=video_id,
-    )
+    stats = index.describe_index_stats()
+    namespaces = stats.namespaces or {}
+    
+    if video_id in namespaces:
+        vector_store.delete(
+            delete_all=True,
+            namespace=video_id,
+        )
     
     vector_store.add_documents(
         documents=chunks,
