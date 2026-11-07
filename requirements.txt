@@ -1,5 +1,6 @@
 python-dotenv
 uvicorn
+youtube-transcript-api
 fastapi[standard]
 langchain-huggingface 
 sentence-transformers
