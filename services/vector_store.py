@@ -4,30 +4,47 @@ from pinecone import Pinecone
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_pinecone import PineconeVectorStore
 from langchain_core.documents import Document
+from functools import lru_cache
 
 load_dotenv()
 
 INDEX_NAME = os.environ["PINECONE_INDEX_NAME"]
 API_KEY = os.environ["PINECONE_KEY"]
 
-embeddings = HuggingFaceEmbeddings(
-    model_name="sentence-transformers/all-MiniLM-L6-v2"
-)
+@lru_cache
+def get_embeddings():
+    return HuggingFaceEmbeddings(
+        model_name="sentence-transformers/all-MiniLM-L6-v2"
+    )
 
-pc = Pinecone(api_key=API_KEY)
-index = pc.Index(INDEX_NAME)
+@lru_cache
+def get_pinecone():
+    api_key = os.getenv("PINECONE_KEY")
+    index_name = os.getenv("PINECONE_INDEX_NAME")
 
-def load_vector_store(video_id:str):
+    if not api_key or not index_name:
+        raise RuntimeError("Missing Pinecone environment variables")
+
+    pc = Pinecone(api_key=api_key)
+    return pc.Index(index_name)
+
+def load_vector_store(video_id: str):
+    index_name = os.getenv("PINECONE_INDEX_NAME")
+    api_key = os.getenv("PINECONE_KEY")
+
+    if not index_name or not api_key:
+        raise RuntimeError("Missing Pinecone environment variables")
+
     return PineconeVectorStore(
-        index_name=INDEX_NAME,
-        embedding=embeddings,
+        index_name=index_name,
+        embedding=get_embeddings(),
         namespace=video_id,
-        pinecone_api_key=API_KEY
+        pinecone_api_key=api_key,
     )
     
 def create_vector_store(chunks: list[Document], video_id: str):
     vector_store=load_vector_store(video_id)
-    
+    index = get_pinecone()
     stats = index.describe_index_stats()
     namespaces = stats.namespaces or {}
     

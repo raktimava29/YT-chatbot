@@ -1,16 +1,19 @@
 from sentence_transformers import CrossEncoder
 from services.retriever import get_retriever
+from functools import lru_cache
 
-reranker = CrossEncoder(
-    "cross-encoder/ms-marco-MiniLM-L-6-v2"
-)
+@lru_cache
+def get_reranker():
+    reranker = CrossEncoder(
+        "cross-encoder/ms-marco-MiniLM-L-6-v2"
+    )
 
 def rerank_documents(query, documents):
     pairs = [
         (query, doc.page_content) for doc in documents
     ]
     
-    scores = reranker.predict(pairs)
+    scores = get_reranker().predict(pairs)
     
     ranked = sorted(
         zip(documents, scores),

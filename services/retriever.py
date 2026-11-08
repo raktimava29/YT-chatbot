@@ -2,7 +2,7 @@ from langchain_core.documents import Document
 from langchain_core.retrievers import BaseRetriever
 from pydantic import ConfigDict, Field
 
-from services.vector_store import index, embeddings
+from services.vector_store import get_pinecone, get_embeddings
 
 class PineconeRetriever(BaseRetriever):
     index:object = Field(exclude=True)
@@ -46,8 +46,8 @@ class PineconeRetriever(BaseRetriever):
     
 def get_retriever(video_id:str, k:int = 20):
     return PineconeRetriever(
-        index=index,
-        embeddings=embeddings,
+        index=get_pinecone(),
+        embeddings=get_embeddings(),
         video_id=video_id,
         k=k
     )
