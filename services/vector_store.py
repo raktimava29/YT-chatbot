@@ -1,17 +1,20 @@
 import os
 from dotenv import load_dotenv
 from pinecone import Pinecone
-from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_pinecone import PineconeVectorStore
 from langchain_core.documents import Document
 from functools import lru_cache
 
 load_dotenv()
 
-@lru_cache
+@lru_cache(maxsize=1)
 def get_embeddings():
+    from langchain_huggingface import HuggingFaceEmbeddings
+
     return HuggingFaceEmbeddings(
-        model_name="sentence-transformers/all-MiniLM-L6-v2"
+        model_name="sentence-transformers/all-MiniLM-L6-v2",
+        model_kwargs={"device": "cpu"},
+        encode_kwargs={"batch_size": 1},
     )
 
 @lru_cache
