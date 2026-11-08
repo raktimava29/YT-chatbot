@@ -4,7 +4,7 @@ from functools import lru_cache
 
 @lru_cache
 def get_reranker():
-    reranker = CrossEncoder(
+    return CrossEncoder(
         "cross-encoder/ms-marco-MiniLM-L-6-v2"
     )
 

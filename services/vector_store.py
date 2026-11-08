@@ -8,9 +8,6 @@ from functools import lru_cache
 
 load_dotenv()
 
-INDEX_NAME = os.environ["PINECONE_INDEX_NAME"]
-API_KEY = os.environ["PINECONE_KEY"]
-
 @lru_cache
 def get_embeddings():
     return HuggingFaceEmbeddings(
