@@ -1,9 +1,12 @@
+import logging
 from fastapi import APIRouter, HTTPException
 from services.transcript import (TranscriptRequest, TranscriptSearchRequest, TranscriptProviderError, fetch_transcript)
 
 from services.transcript import TranscriptRequest, TranscriptSearchRequest,fetch_transcript
 from services.splitter import split_transcript
 from services.vector_store import create_vector_store, search_transcript
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/transcript", tags=["Transcript"])
 
@@ -49,23 +52,35 @@ def get_transcript(request: TranscriptRequest):
 @router.post("/index")
 def index_transcript(request: TranscriptRequest):
     try:
+        logger.info("INDEX: Starting. Video=%s", request.video_id)
+
+        logger.info("INDEX: Fetching transcript")
         text = fetch_transcript(
             request.video_id,
             request.language,
         )
 
+        logger.info("INDEX: Transcript fetched. Segments=%s", len(text))
+
+        logger.info("INDEX: Splitting transcript")
         chunks = split_transcript(
             transcript=text,
             video_id=request.video_id,
         )
 
+        logger.info("INDEX: Split complete. Chunks=%s", len(chunks))
+
         for chunk in chunks:
             chunk.metadata["language"] = request.language
+
+        logger.info("INDEX: Starting Pinecone indexing")
 
         create_vector_store(
             chunks,
             request.video_id,
         )
+
+        logger.info("INDEX: Completed successfully")
 
         return {
             "message": "Transcript indexed successfully",
@@ -74,16 +89,12 @@ def index_transcript(request: TranscriptRequest):
         }
 
     except TranscriptProviderError as exc:
-        raise HTTPException(
-            status_code=502,
-            detail=str(exc),
-        ) from exc
+        logger.exception("INDEX: Transcript provider failed")
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
 
     except Exception as exc:
-        raise HTTPException(
-            status_code=500,
-            detail=str(exc),
-        ) from exc
+        logger.exception("INDEX: Failed")
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @router.post("/search")
