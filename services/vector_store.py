@@ -2,32 +2,80 @@ import os
 import logging
 from functools import lru_cache
 
+import httpx
 from dotenv import load_dotenv
 from pinecone import Pinecone
 from langchain_pinecone import PineconeVectorStore
 from langchain_core.documents import Document
+from langchain_core.embeddings import Embeddings
 
 load_dotenv()
 
 logger = logging.getLogger(__name__)
 
 BATCH_SIZE = 16
+EMBEDDING_MODEL = "embed-english-light-v3.0"
+EMBEDDING_DIMENSION = 384
+COHERE_URL = "https://api.cohere.com/v2/embed"
+
+
+class CohereEmbeddings(Embeddings):
+    def __init__(self):
+        self.api_key = os.getenv("COHERE_API_KEY")
+
+        if not self.api_key:
+            raise RuntimeError("Missing COHERE_API_KEY")
+
+        self.client = httpx.Client(
+            timeout=httpx.Timeout(60.0, connect=10.0),
+            headers={
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json",
+            },
+        )
+
+    def _embed(self, texts: list[str], input_type: str):
+        if not texts:
+            return []
+
+        response = self.client.post(
+            COHERE_URL,
+            json={
+                "model": EMBEDDING_MODEL,
+                "texts": texts,
+                "input_type": input_type,
+                "embedding_types": ["float"],
+            },
+        )
+
+        response.raise_for_status()
+
+        vectors = response.json()["embeddings"]["float"]
+
+        if any(len(vector) != EMBEDDING_DIMENSION for vector in vectors):
+            raise RuntimeError("Unexpected Cohere embedding dimension")
+
+        return vectors
+
+    def embed_documents(self, texts: list[str]) -> list[list[float]]:
+        embeddings = []
+
+        for start in range(0, len(texts), 96):
+            batch = texts[start:start + 96]
+            embeddings.extend(
+                self._embed(batch, "search_document")
+            )
+
+        return embeddings
+
+    def embed_query(self, text: str) -> list[float]:
+        return self._embed([text], "search_query")[0]
 
 
 @lru_cache(maxsize=1)
 def get_embeddings():
-    logger.info("EMBEDDINGS: Loading model")
-
-    from langchain_huggingface import HuggingFaceEmbeddings
-
-    embeddings = HuggingFaceEmbeddings(
-        model_name="sentence-transformers/all-MiniLM-L6-v2",
-        model_kwargs={"device": "cpu"},
-        encode_kwargs={"batch_size": 1},
-    )
-
-    logger.info("EMBEDDINGS: Model loaded")
-    return embeddings
+    logger.info("EMBEDDINGS: Initializing Cohere client")
+    return CohereEmbeddings()
 
 
 @lru_cache(maxsize=1)
@@ -64,13 +112,26 @@ def create_vector_store(chunks: list[Document], video_id: str):
 
     index = get_pinecone()
     stats = index.describe_index_stats()
+
+    if stats.dimension != EMBEDDING_DIMENSION:
+        raise RuntimeError(
+            f"Pinecone dimension mismatch: expected {EMBEDDING_DIMENSION}, "
+            f"got {stats.dimension}"
+        )
+
+    # Verify Cohere API before deleting existing vectors.
+    logger.info("INDEX: Testing Cohere embeddings")
+
+    embeddings = get_embeddings()
+    embeddings.embed_query("Embedding connectivity test")
+
+    logger.info("INDEX: Cohere embeddings ready")
+
     namespaces = stats.namespaces or {}
 
     if video_id in namespaces:
-        logger.info("INDEX: Deleting existing namespace")
+        logger.info("INDEX: Deleting old namespace")
         index.delete(delete_all=True, namespace=video_id)
-
-    logger.info("INDEX: Loading vector store and embeddings")
 
     vector_store = load_vector_store(video_id)
 
