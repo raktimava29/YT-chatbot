@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException
-from youtube_transcript_api import (TranscriptsDisabled, VideoUnavailable)
+from services.transcript import (TranscriptRequest, TranscriptSearchRequest, TranscriptProviderError, fetch_transcript)
 
 from services.transcript import TranscriptRequest, TranscriptSearchRequest,fetch_transcript
 from services.splitter import split_transcript
@@ -33,16 +33,10 @@ def get_transcript(request: TranscriptRequest):
             ],
         }
 
-    except TranscriptsDisabled as exc:
+    except TranscriptProviderError as exc:
         raise HTTPException(
-            status_code=404,
-            detail="Transcripts disabled for this video",
-        ) from exc
-
-    except VideoUnavailable as exc:
-        raise HTTPException(
-            status_code=404,
-            detail="Video unavailable",
+            status_code=502,
+            detail=str(exc),
         ) from exc
 
     except Exception as exc:
@@ -79,16 +73,10 @@ def index_transcript(request: TranscriptRequest):
             "total_chunks": len(chunks),
         }
 
-    except TranscriptsDisabled as exc:
+    except TranscriptProviderError as exc:
         raise HTTPException(
-            status_code=404,
-            detail="Transcripts disabled for this video",
-        ) from exc
-
-    except VideoUnavailable as exc:
-        raise HTTPException(
-            status_code=404,
-            detail="Video unavailable",
+            status_code=502,
+            detail=str(exc),
         ) from exc
 
     except Exception as exc:
