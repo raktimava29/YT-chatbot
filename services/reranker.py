@@ -1,55 +1,92 @@
-import gc
-from functools import lru_cache
+import os
+import logging
+
+import httpx
 
 from services.retriever import get_retriever
 
+logger = logging.getLogger(__name__)
 
-@lru_cache(maxsize=1)
-def get_reranker():
-    from sentence_transformers import CrossEncoder
+COHERE_RERANK_URL = "https://api.cohere.com/v2/rerank"
+COHERE_RERANK_MODEL = "rerank-v3.5"
 
-    return CrossEncoder(
-        "cross-encoder/ms-marco-MiniLM-L-6-v2",
-        device="cpu",
+
+def rerank_documents(query, documents, top_k=4):
+    if not documents:
+        return []
+
+    api_key = os.getenv("COHERE_API_KEY")
+
+    if not api_key:
+        raise RuntimeError("Missing COHERE_API_KEY")
+
+    logger.info(
+        "RERANK: Sending %s documents to Cohere",
+        len(documents),
     )
 
+    response = httpx.post(
+        COHERE_RERANK_URL,
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        },
+        json={
+            "model": COHERE_RERANK_MODEL,
+            "query": query,
+            "documents": [
+                doc.page_content for doc in documents
+            ],
+            "top_n": min(top_k, len(documents)),
+        },
+        timeout=60.0,
+    )
 
-def rerank_documents(query, documents):
-    pairs = [
-        (query, doc.page_content) for doc in documents
+    response.raise_for_status()
+
+    results = response.json()["results"]
+
+    ranked = [
+        (
+            documents[item["index"]],
+            item["relevance_score"],
+        )
+        for item in results
     ]
 
-    scores = get_reranker().predict(
-        pairs,
-        batch_size=1,
-    )
-
-    ranked = sorted(
-        zip(documents, scores),
-        key=lambda x: x[1],
-        reverse=True,
+    logger.info(
+        "RERANK: Cohere returned %s ranked documents",
+        len(ranked),
     )
 
     return ranked
 
 
-def retrieve_and_rerank(video_id: str, query: str, top_k: int = 4, candidate_k: int = 20):
-    from services.vector_store import get_embeddings
+def retrieve_and_rerank(
+    video_id: str,
+    query: str,
+    top_k: int = 4,
+    candidate_k: int = 20,
+):
+    logger.info("RETRIEVER: Fetching %s candidates", candidate_k)
 
     retriever = get_retriever(
         video_id=video_id,
         k=candidate_k,
     )
 
-    docs = retriever.invoke(query)
+    documents = retriever.invoke(query)
 
-    del retriever
-    get_embeddings.cache_clear()
-    gc.collect()
+    logger.info(
+        "RETRIEVER: Retrieved %s documents",
+        len(documents),
+    )
 
-    if not docs:
+    if not documents:
         return []
 
-    ranked_docs = rerank_documents(query, docs)
-
-    return ranked_docs[:top_k]
+    return rerank_documents(
+        query=query,
+        documents=documents,
+        top_k=top_k,
+    )

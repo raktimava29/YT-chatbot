@@ -97,14 +97,6 @@ def ask_video(video_id: str, question: str):
             "answer": unavailable_message,
             "sources": [],
         }
-
-    best_score = float(results[0][1])
-    
-    if best_score < -5.0:
-        return {
-            "answer": unavailable_message,
-            "sources": [],
-        }
     
     context_parts = []
 

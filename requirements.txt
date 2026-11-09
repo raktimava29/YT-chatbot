@@ -2,7 +2,6 @@ python-dotenv
 uvicorn
 supadata
 fastapi[standard]
-sentence-transformers
 langchain_community
 langchain-pinecone
 langchain-groq
