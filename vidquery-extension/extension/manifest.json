@@ -1,0 +1,27 @@
+{
+  "manifest_version": 3,
+  "name": "VidQuery - YouTube AI Assistant",
+  "version": "1.0.0",
+  "description": "Chat with YouTube videos using AI.",
+  "minimum_chrome_version": "116",
+  "permissions": [
+    "sidePanel",
+    "storage",
+    "tabs"
+  ],
+  "host_permissions": [
+    "https://www.youtube.com/*",
+    "https://youtu.be/*",
+    "https://vidquery-npa6.onrender.com/*",
+    "https://img.youtube.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "side_panel": {
+    "default_path": "index.html"
+  },
+  "action": {
+    "default_title": "Open VidQuery"
+  }
+}
