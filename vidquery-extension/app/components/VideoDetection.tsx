@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useActiveYouTubeVideo } from "../hooks/useActiveYouTubeVideo";
-import { askVideo, indexTranscript, type ChatSource } from "../lib/api";
+import { indexTranscript, streamVideoAnswer, type ChatSource } from "../lib/api";
 import {
   getIndexedVideos,
   getSelectedSessions,
@@ -192,13 +192,44 @@ export default function VideoDetection() {
     setFailedQuestion(null);
     const controller = new AbortController();
     abortControllerRef.current = controller;
+    const assistantMessageId = crypto.randomUUID();
+    let streamedContent = "";
+    updateActiveSession((session) => ({
+      ...session,
+      messages: [...session.messages, {
+        id: assistantMessageId, role: "assistant", content: "", sources: [], createdAt: Date.now(),
+      }],
+      updatedAt: Date.now(),
+    }));
     try {
-      const result = await askVideo(video.videoId, trimmedQuestion, controller.signal);
-      const assistantMessage: ChatMessage = { id: crypto.randomUUID(), role: "assistant", content: result.answer, sources: result.sources ?? [], createdAt: Date.now() };
-      updateActiveSession((session) => ({ ...session, messages: [...session.messages, assistantMessage], updatedAt: Date.now() }));
+      await streamVideoAnswer(video.videoId, trimmedQuestion, {
+        onToken: (token) => {
+          streamedContent += token;
+          updateActiveSession((session) => ({
+            ...session,
+            messages: session.messages.map((message) => message.id === assistantMessageId
+              ? { ...message, content: streamedContent } : message),
+            updatedAt: Date.now(),
+          }));
+        },
+        onSources: (sources) => {
+          updateActiveSession((session) => ({
+            ...session,
+            messages: session.messages.map((message) => message.id === assistantMessageId
+              ? { ...message, sources } : message),
+            updatedAt: Date.now(),
+          }));
+        },
+      }, controller.signal);
+      if (!streamedContent) {
+        updateActiveSession((session) => ({ ...session, messages: session.messages.filter((message) => message.id !== assistantMessageId) }));
+      }
     } catch (err) {
+      if (!streamedContent) {
+        updateActiveSession((session) => ({ ...session, messages: session.messages.filter((message) => message.id !== assistantMessageId) }));
+      }
       if (err instanceof DOMException && err.name === "AbortError") {
-        setChatError("Response stopped.");
+        setChatError(streamedContent ? "Response stopped. Partial answer saved." : "Response stopped.");
         setFailedQuestion(trimmedQuestion);
       } else {
         setChatError(err instanceof Error ? err.message : "Could not get answer.");
@@ -326,7 +357,7 @@ export default function VideoDetection() {
                 {message.role === "assistant" && <div className="mt-2 flex items-center justify-between border-t border-white/10 pt-2"><span className="text-[9px] text-slate-600">VidQuery</span><button type="button" onClick={() => void copyAnswer(message)} className="rounded-md px-2 py-1 text-[10px] text-slate-400 hover:bg-white/10 hover:text-white">{copiedMessageId === message.id ? "Copied" : "Copy answer"}</button></div>}
                 {message.sources && message.sources.length > 0 && <details className="group mt-2 border-t border-white/10 pt-2"><summary className="flex cursor-pointer list-none items-center justify-between gap-2 rounded-lg py-1 text-[10px] font-semibold text-slate-400 transition hover:text-slate-200 [&::-webkit-details-marker]:hidden"><span>Sources ({message.sources.length})</span><span className="inline-block text-xs transition-transform duration-200 group-open:rotate-180">⌄</span></summary><div className="mt-2 space-y-2">{message.sources.map((source, index) => <a key={`${source.chunk_id ?? "source"}-${index}`} href={sourceUrl(source)} target="_blank" rel="noreferrer" className="block rounded-lg border border-white/5 bg-black/20 p-2 text-[11px] leading-4 text-sky-300 hover:border-sky-400/20 hover:bg-black/30"><span className="font-semibold">{source.start_time !== null ? formatTimestamp(source.start_time) : "Timestamp unavailable"}{source.end_time !== null ? ` – ${formatTimestamp(source.end_time)}` : ""}</span><span className="mt-1 block line-clamp-4 text-slate-400">{source.content}</span></a>)}</div></details>}
               </article>)}
-              {asking && <div className="mr-auto flex items-center gap-2 rounded-xl bg-white/[0.06] px-3 py-2 text-xs text-slate-400"><span className="h-1.5 w-1.5 animate-pulse rounded-full bg-red-400" />VidQuery thinking...</div>}
+              {asking && <div className="mr-auto flex items-center gap-2 rounded-xl bg-white/[0.06] px-3 py-2 text-xs text-slate-400"><span className="h-1.5 w-1.5 animate-pulse rounded-full bg-red-400" />VidQuery is responding...</div>}
               {chatError && <div role="alert" className="rounded-lg border border-red-400/20 bg-red-400/10 p-3 text-[10px] leading-5 text-red-200"><p>{chatError}</p>{failedQuestion && !asking && <button type="button" onClick={() => void sendQuestion(failedQuestion, false)} className="mt-2 rounded-md bg-red-400/15 px-2.5 py-1.5 font-semibold text-red-100 hover:bg-red-400/25">Retry response</button>}</div>}
             </div>
 
@@ -334,7 +365,7 @@ export default function VideoDetection() {
           </section>
         )}
         {!sessionReady && video && <p className="text-center text-xs text-slate-500">Restoring saved chats...</p>}
-        <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3"><p className="text-xs font-medium text-slate-300">Phase 5 · Polished chat experience</p><p className="mt-1 text-[10px] leading-5 text-slate-500">Markdown answers · Collapsible sources · Copy · Retry · Stop generation</p></div>
+        <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3"><p className="text-xs font-medium text-slate-300">Phase 6 · Live streaming chat</p><p className="mt-1 text-[10px] leading-5 text-slate-500">Token-by-token responses · Collapsible sources · Copy · Retry · Stop generation</p></div>
       </section>
     </main>
   );
