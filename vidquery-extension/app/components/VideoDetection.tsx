@@ -87,6 +87,7 @@ export default function VideoDetection() {
   const [indexedChunks, setIndexedChunks] = useState<number | null>(null);
   const [question, setQuestion] = useState("");
   const [asking, setAsking] = useState(false);
+  const [streamingMessageId, setStreamingMessageId] = useState<string | null>(null);
   const [chatError, setChatError] = useState<string | null>(null);
   const [failedQuestion, setFailedQuestion] = useState<string | null>(null);
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
@@ -193,6 +194,7 @@ export default function VideoDetection() {
     const controller = new AbortController();
     abortControllerRef.current = controller;
     const assistantMessageId = crypto.randomUUID();
+    setStreamingMessageId(assistantMessageId);
     let streamedContent = "";
     updateActiveSession((session) => ({
       ...session,
@@ -237,6 +239,7 @@ export default function VideoDetection() {
       }
     } finally {
       if (abortControllerRef.current === controller) abortControllerRef.current = null;
+      setStreamingMessageId((current) => current === assistantMessageId ? null : current);
       setAsking(false);
     }
   }
@@ -354,7 +357,7 @@ export default function VideoDetection() {
               {isIndexed && messages.length === 0 && <div className="my-auto"><p className="mb-3 text-center text-xs text-slate-400">Ask anything about this video.</p><div className="grid grid-cols-1 gap-2">{SUGGESTED_QUESTIONS.map((suggestion) => <button key={suggestion} type="button" onClick={() => void sendQuestion(suggestion)} disabled={asking} className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2.5 text-left text-[11px] text-slate-300 transition hover:border-red-400/30 hover:bg-red-500/5 disabled:opacity-50">{suggestion} <span className="float-right text-slate-600">↗</span></button>)}</div></div>}
               {messages.map((message) => <article key={message.id} className={`max-w-[96%] rounded-xl p-3 ${message.role === "user" ? "ml-auto bg-red-500/15 text-red-50" : "mr-auto bg-white/[0.06] text-slate-200"}`}>
                 {message.role === "assistant" ? <MarkdownAnswer content={message.content} /> : <p className="whitespace-pre-wrap text-xs leading-5">{message.content}</p>}
-                {message.role === "assistant" && <div className="mt-2 flex items-center justify-between border-t border-white/10 pt-2"><span className="text-[9px] text-slate-600">VidQuery</span><button type="button" onClick={() => void copyAnswer(message)} className="rounded-md px-2 py-1 text-[10px] text-slate-400 hover:bg-white/10 hover:text-white">{copiedMessageId === message.id ? "Copied" : "Copy answer"}</button></div>}
+                {message.role === "assistant" && message.content.trim().length > 0 && message.id !== streamingMessageId && <div className="mt-2 flex items-center justify-between border-t border-white/10 pt-2"><span className="text-[9px] text-slate-600">VidQuery</span><button type="button" onClick={() => void copyAnswer(message)} className="rounded-md px-2 py-1 text-[10px] text-slate-400 hover:bg-white/10 hover:text-white">{copiedMessageId === message.id ? "Copied" : "Copy answer"}</button></div>}
                 {message.sources && message.sources.length > 0 && <details className="group mt-2 border-t border-white/10 pt-2"><summary className="flex cursor-pointer list-none items-center justify-between gap-2 rounded-lg py-1 text-[10px] font-semibold text-slate-400 transition hover:text-slate-200 [&::-webkit-details-marker]:hidden"><span>Sources ({message.sources.length})</span><span className="inline-block text-xs transition-transform duration-200 group-open:rotate-180">⌄</span></summary><div className="mt-2 space-y-2">{message.sources.map((source, index) => <a key={`${source.chunk_id ?? "source"}-${index}`} href={sourceUrl(source)} target="_blank" rel="noreferrer" className="block rounded-lg border border-white/5 bg-black/20 p-2 text-[11px] leading-4 text-sky-300 hover:border-sky-400/20 hover:bg-black/30"><span className="font-semibold">{source.start_time !== null ? formatTimestamp(source.start_time) : "Timestamp unavailable"}{source.end_time !== null ? ` – ${formatTimestamp(source.end_time)}` : ""}</span><span className="mt-1 block line-clamp-4 text-slate-400">{source.content}</span></a>)}</div></details>}
               </article>)}
               {asking && <div className="mr-auto flex items-center gap-2 rounded-xl bg-white/[0.06] px-3 py-2 text-xs text-slate-400"><span className="h-1.5 w-1.5 animate-pulse rounded-full bg-red-400" />VidQuery is responding...</div>}

@@ -17,11 +17,6 @@ export interface ChatSource {
   youtube_url?: string;
 }
 
-export interface ChatResponse {
-  answer: string;
-  sources: ChatSource[];
-}
-
 async function request<T>(path: string, body: unknown, signal?: AbortSignal): Promise<T> {
   let response: Response;
 
@@ -55,13 +50,6 @@ export function indexTranscript(videoId: string, language = "en") {
     video_id: videoId,
     language,
   });
-}
-
-export function askVideo(videoId: string, question: string, signal?: AbortSignal) {
-  return request<ChatResponse>("/chat/ask", {
-    video_id: videoId,
-    question,
-  }, signal);
 }
 export interface StreamCallbacks {
   onToken: (token: string) => void;
